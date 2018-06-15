@@ -1,0 +1,33 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: memcached
+  namespace: openfaas
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: memcached
+    spec:
+      containers:
+      - name:  memcached
+        image: launcher.gcr.io/google/memcached1
+        imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memcached
+  namespace: openfaas
+  labels:
+    app: memcached
+spec:
+  type: NodePort
+  ports:
+    - port: 11211
+      protocol: TCP
+      targetPort: 11211
+      nodePort: 31585
+  selector:
+    app: memcached
