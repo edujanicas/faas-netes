@@ -32,6 +32,8 @@ spec:
         - mountPath: /etc/prometheus/alert.rules.yml
           name: prometheus-config
           subPath: alert.rules.yml
+      nodeSelector:
+        openfaas-type: master
       volumes:
         - name: prometheus-config
           configMap:

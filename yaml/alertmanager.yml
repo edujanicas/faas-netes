@@ -30,6 +30,8 @@ spec:
         - mountPath: /alertmanager.yml
           name: alertmanager-config
           subPath: alertmanager.yml
+      nodeSelector:
+        openfaas-type: master
       volumes:
         - name: alertmanager-config
           configMap:

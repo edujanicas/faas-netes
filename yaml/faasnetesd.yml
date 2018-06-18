@@ -32,6 +32,8 @@ spec:
           value: "20s"
         - name: image_pull_policy
           value: "Always"
+      nodeSelector:
+        openfaas-type: master
 ---
 apiVersion: v1
 kind: Service
