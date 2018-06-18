@@ -49,6 +49,8 @@ spec:
             memory: 250Mi
           limits:
             memory: 250Mi   # Adjust to suit needs of deployment
+      nodeSelector:
+        openfaas-type: master
 ---
 apiVersion: v1
 kind: Service
