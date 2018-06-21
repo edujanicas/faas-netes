@@ -19,7 +19,7 @@ build:
 	docker build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" -t ejanicas/faas-netesd:$(TAG) . 
 
 push:
-	docker push alexellis2/faas-netes:$(TAG)
+	docker push ejanicas/faas-netesd:$(TAG)
 
 install:
 	kubectl apply -f faas.yml,monitoring.yml,rbac.yml
