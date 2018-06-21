@@ -16,7 +16,7 @@ build-armhf:
 	docker build -t functions/faas-netesd:$(TAG)-armhf . -f Dockerfile.armhf
 
 build:
-	docker build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" -t functions/faas-netesd:$(TAG) . --squash=${SQUASH}
+	docker build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" -t ejanicas/faas-netesd:$(TAG) . 
 
 push:
 	docker push alexellis2/faas-netes:$(TAG)
