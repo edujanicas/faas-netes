@@ -217,6 +217,10 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 							LivenessProbe:   probe,
 							ReadinessProbe:  probe,
 						},
+						{
+							Name:  "memcached",
+							Image: "launcher.gcr.io/google/memcached1",
+						},
 					},
 					RestartPolicy: v1.RestartPolicyAlways,
 					DNSPolicy:     v1.DNSClusterFirst,
