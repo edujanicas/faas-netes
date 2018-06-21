@@ -204,8 +204,8 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 				},
 				Spec: apiv1.PodSpec{
 					NodeSelector: nodeSelector,
-					Containers: []apiv1.Container{
-						{
+					Containers: {
+						[]apiv1.Container{
 							Name:  request.Service,
 							Image: request.Image,
 							Ports: []apiv1.ContainerPort{
@@ -217,7 +217,7 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 							LivenessProbe:   probe,
 							ReadinessProbe:  probe,
 						},
-						{
+						[]apiv1.Container{
 							Name:  "memcached_test",
 							Image: "launcher.gcr.io/google/memcached1",
 							Ports: []apiv1.ContainerPort{
