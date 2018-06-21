@@ -95,8 +95,6 @@ func MakeDeployHandler(functionNamespace string, clientset *kubernetes.Clientset
 			return
 		}
 
-		log.Println("Created deployment - " + request.Service)
-
 		service := clientset.Core().Services(functionNamespace)
 		serviceSpec := makeServiceSpec(request)
 		_, err = service.Create(serviceSpec)
@@ -167,7 +165,71 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 		imagePullPolicy = apiv1.PullAlways
 	}
 
-	deploymentSpec := nil
+	deploymentSpec := &v1beta1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Deployment",
+			APIVersion: "extensions/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: request.Service,
+		},
+		Spec: v1beta1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"faas_function": request.Service,
+				},
+			},
+			Replicas: initialReplicas,
+			Strategy: v1beta1.DeploymentStrategy{
+				Type: v1beta1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &v1beta1.RollingUpdateDeployment{
+					MaxUnavailable: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: int32(0),
+					},
+					MaxSurge: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: int32(1),
+					},
+				},
+			},
+			RevisionHistoryLimit: int32p(10),
+			Template: apiv1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        request.Service,
+					Labels:      labels,
+					Annotations: map[string]string{"prometheus.io.scrape": "false"},
+				},
+				Spec: apiv1.PodSpec{
+					NodeSelector: nodeSelector,
+					Containers: []apiv1.Container{
+						{
+							Name:  request.Service,
+							Image: request.Image,
+							Ports: []apiv1.ContainerPort{
+								{ContainerPort: int32(watchdogPort), Protocol: v1.ProtocolTCP},
+							},
+							Env:             envVars,
+							Resources:       *resources,
+							ImagePullPolicy: imagePullPolicy,
+							LivenessProbe:   probe,
+							ReadinessProbe:  probe,
+						},
+						{
+							Name:  "memcached_test",
+							Image: "launcher.gcr.io/google/memcached1",
+							Ports: []apiv1.ContainerPort{
+								{ContainerPort: int32(8081), Protocol: v1.ProtocolTCP},
+							},
+							ImagePullPolicy: imagePullPolicy,
+						},
+					},
+					RestartPolicy: v1.RestartPolicyAlways,
+					DNSPolicy:     v1.DNSClusterFirst,
+				},
+			},
+		},
+	}
 
 	if err := UpdateSecrets(request, deploymentSpec, existingSecrets); err != nil {
 		return nil, err
