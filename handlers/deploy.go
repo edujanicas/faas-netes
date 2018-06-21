@@ -218,8 +218,12 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 							ReadinessProbe:  probe,
 						},
 						{
-							Name:  "memcached",
+							Name:  "memcached_test",
 							Image: "launcher.gcr.io/google/memcached1",
+							Ports: []apiv1.ContainerPort{
+								{ContainerPort: int32(8081), Protocol: v1.ProtocolTCP},
+							},
+							ImagePullPolicy: imagePullPolicy,
 						},
 					},
 					RestartPolicy: v1.RestartPolicyAlways,
