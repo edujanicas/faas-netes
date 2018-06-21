@@ -213,18 +213,6 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 							},
 							ImagePullPolicy: imagePullPolicy,
 						},
-						[]apiv1.Container{
-							Name:  request.Service,
-							Image: request.Image,
-							Ports: []apiv1.ContainerPort{
-								{ContainerPort: int32(watchdogPort), Protocol: v1.ProtocolTCP},
-							},
-							Env:             envVars,
-							Resources:       *resources,
-							ImagePullPolicy: imagePullPolicy,
-							LivenessProbe:   probe,
-							ReadinessProbe:  probe,
-						},
 					},
 					RestartPolicy: v1.RestartPolicyAlways,
 					DNSPolicy:     v1.DNSClusterFirst,
