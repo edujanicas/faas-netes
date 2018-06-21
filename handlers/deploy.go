@@ -206,6 +206,14 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 					NodeSelector: nodeSelector,
 					Containers: {
 						[]apiv1.Container{
+							Name:  "memcached_test",
+							Image: "launcher.gcr.io/google/memcached1",
+							Ports: []apiv1.ContainerPort{
+								{ContainerPort: int32(8081), Protocol: v1.ProtocolTCP},
+							},
+							ImagePullPolicy: imagePullPolicy,
+						},
+						[]apiv1.Container{
 							Name:  request.Service,
 							Image: request.Image,
 							Ports: []apiv1.ContainerPort{
@@ -216,14 +224,6 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 							ImagePullPolicy: imagePullPolicy,
 							LivenessProbe:   probe,
 							ReadinessProbe:  probe,
-						},
-						[]apiv1.Container{
-							Name:  "memcached_test",
-							Image: "launcher.gcr.io/google/memcached1",
-							Ports: []apiv1.ContainerPort{
-								{ContainerPort: int32(8081), Protocol: v1.ProtocolTCP},
-							},
-							ImagePullPolicy: imagePullPolicy,
 						},
 					},
 					RestartPolicy: v1.RestartPolicyAlways,
