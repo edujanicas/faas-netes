@@ -217,10 +217,10 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 						},
 						{
 							// Deploy a state container for each function
-							Name:  "memcached-test",
+							Name:  "memcached",
 							Image: "launcher.gcr.io/google/memcached1",
 							Ports: []apiv1.ContainerPort{
-								{ContainerPort: int32(8081), Protocol: v1.ProtocolTCP},
+								{ContainerPort: int32(11211), Protocol: v1.ProtocolTCP},
 							},
 							ImagePullPolicy: imagePullPolicy,
 						},
