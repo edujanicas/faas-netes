@@ -14,6 +14,8 @@ spec:
       - name:  memcached
         image: launcher.gcr.io/google/memcached1
         imagePullPolicy: Always
+      nodeSelector:
+        openfaas-type: master
 ---
 apiVersion: v1
 kind: Service
