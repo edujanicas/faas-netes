@@ -10,9 +10,10 @@ spec:
       labels:
         app: gateway
     spec:
+      serviceAccountName: faas-controller
       containers:
       - name: gateway
-        image: functions/gateway:0.8.1
+        image: openfaas/gateway:0.8.9
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -24,7 +25,7 @@ spec:
 
         env:
         - name: functions_provider_url
-          value: "http://faas-netesd.openfaas.svc.cluster.local.:8080/" # Final `.` specifies an absolute address
+          value: "http://127.0.0.1:8081/" # Final `.` specifies an absolute address
         - name: faas_nats_address
           value: "nats.openfaas.svc.cluster.local."
         - name: faas_nats_port
@@ -39,6 +40,12 @@ spec:
           value: "35s"
         - name: upstream_timeout  # Must be smaller than read/write_timeout
           value: "30s"
+        - name: basic_auth
+          value: "false"
+        - name: secret_mount_path
+          value: "/etc/openfaas"
+        - name: scale_from_zero
+          value: "false"
 
         ports:
         - containerPort: 8080
@@ -49,22 +56,21 @@ spec:
             memory: 250Mi
           limits:
             memory: 250Mi   # Adjust to suit needs of deployment
+      - name: faas-netes
+        image: openfaas/faas-netes:0.6.0
+        imagePullPolicy: Always
+        env:
+        - name: port
+          value: "8081"
+        - name: function_namespace
+          value: openfaas-fn
+        - name: read_timeout
+          value: "10"
+        - name: write_timeout
+          value: "10"
+        ports:
+        - containerPort: 8081
+          protocol: TCP
       nodeSelector:
         openfaas-type: master
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: gateway
-  namespace: openfaas
-  labels:
-    app: gateway
-spec:
-  type: NodePort
-  ports:
-    - port: 8080
-      protocol: TCP
-      targetPort: 8080
-      nodePort: 31112
-  selector:
-    app: gateway
+

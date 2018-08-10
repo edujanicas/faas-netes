@@ -1,34 +1,30 @@
 TAG?=latest
-SQUASH?=false
 
-local-fmt:
-	gofmt -l -d $(find . -type f -name '*.go' -not -path "./vendor/*")
+all: build
 
-local-go:
+local:
 	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o faas-netes
 
-local: 	local-fmt 	local-go
-
 build-arm64:
-	docker build -t functions/faas-netesd:$(TAG)-arm64 . -f Dockerfile.arm64
+	docker build -t openfaas/faas-netes:$(TAG)-arm64 . -f Dockerfile.arm64
 
 build-armhf:
-	docker build -t functions/faas-netesd:$(TAG)-armhf . -f Dockerfile.armhf
+	docker build -t openfaas/faas-netes:$(TAG)-armhf . -f Dockerfile.armhf
 
 build:
-	docker build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" -t ejanicas/faas-netesd:$(TAG) . 
+	docker build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" -t openfaas/faas-netes:$(TAG) .
 
 push:
-	docker push ejanicas/faas-netesd:$(TAG)
+	docker push alexellis2/faas-netes:$(TAG)
 
-install:
-	kubectl apply -f faas.yml,monitoring.yml,rbac.yml
+namespaces:
+	kubectl apply -f namespaces.yml
 
-install-async:
-	kubectl apply -f faas.async.yml,monitoring.yml,rbac.yml,nats.yml
+install: namespaces
+	kubectl apply -f yaml/
 
-install-armhf:
-	kubectl apply -f faas.armhf.yml,monitoring.armhf.yml,rbac.yml
+install-armhf: namespaces
+	kubectl apply -f yaml_armhf/
 
 .PHONY: charts
 charts:

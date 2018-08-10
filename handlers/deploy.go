@@ -44,9 +44,18 @@ func ValidateDeployRequest(request *requests.CreateFunctionRequest) error {
 	return fmt.Errorf("(%s) must be a valid DNS entry for service name", request.Service)
 }
 
+// FunctionProbeConfig specify options for Liveliness and Readiness checks
+type FunctionProbeConfig struct {
+	InitialDelaySeconds int32
+	TimeoutSeconds      int32
+	PeriodSeconds       int32
+}
+
 // DeployHandlerConfig specify options for Deployments
 type DeployHandlerConfig struct {
-	EnableFunctionReadinessProbe bool
+	HTTPProbe                    bool
+	FunctionReadinessProbeConfig *FunctionProbeConfig
+	FunctionLivenessProbeConfig  *FunctionProbeConfig
 	ImagePullPolicy              string
 }
 
@@ -95,6 +104,8 @@ func MakeDeployHandler(functionNamespace string, clientset *kubernetes.Clientset
 			return
 		}
 
+		log.Println("Created deployment - " + request.Service)
+
 		service := clientset.Core().Services(functionNamespace)
 		serviceSpec := makeServiceSpec(request)
 		_, err = service.Create(serviceSpec)
@@ -116,21 +127,41 @@ func MakeDeployHandler(functionNamespace string, clientset *kubernetes.Clientset
 
 func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets map[string]*apiv1.Secret, config *DeployHandlerConfig) (*v1beta1.Deployment, error) {
 	envVars := buildEnvVars(&request)
-	path := filepath.Join(os.TempDir(), ".lock")
-	probe := &apiv1.Probe{
-		Handler: apiv1.Handler{
+	var handler apiv1.Handler
+
+	if config.HTTPProbe {
+		handler = apiv1.Handler{
+			HTTPGet: &apiv1.HTTPGetAction{
+				Path: "/_/health",
+				Port: intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: int32(watchdogPort),
+				},
+			},
+		}
+	} else {
+		path := filepath.Join(os.TempDir(), ".lock")
+		handler = apiv1.Handler{
 			Exec: &apiv1.ExecAction{
 				Command: []string{"cat", path},
 			},
-		},
-		InitialDelaySeconds: 3,
-		TimeoutSeconds:      1,
-		PeriodSeconds:       10,
+		}
+	}
+	readinessProbe := &apiv1.Probe{
+		Handler:             handler,
+		InitialDelaySeconds: config.FunctionReadinessProbeConfig.InitialDelaySeconds,
+		TimeoutSeconds:      config.FunctionReadinessProbeConfig.TimeoutSeconds,
+		PeriodSeconds:       config.FunctionReadinessProbeConfig.PeriodSeconds,
 		SuccessThreshold:    1,
 		FailureThreshold:    3,
 	}
-	if !config.EnableFunctionReadinessProbe {
-		probe = nil
+	livenessProbe := &apiv1.Probe{
+		Handler:             handler,
+		InitialDelaySeconds: config.FunctionLivenessProbeConfig.InitialDelaySeconds,
+		TimeoutSeconds:      config.FunctionLivenessProbeConfig.TimeoutSeconds,
+		PeriodSeconds:       config.FunctionLivenessProbeConfig.PeriodSeconds,
+		SuccessThreshold:    1,
+		FailureThreshold:    3,
 	}
 
 	initialReplicas := int32p(initialReplicasCount)
@@ -165,6 +196,7 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 		imagePullPolicy = apiv1.PullAlways
 	}
 
+	annotations := buildAnnotations(request)
 	deploymentSpec := &v1beta1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Deployment",
@@ -172,6 +204,7 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: request.Service,
+			Annotations: annotations,
 		},
 		Spec: v1beta1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -198,7 +231,7 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        request.Service,
 					Labels:      labels,
-					Annotations: map[string]string{"prometheus.io.scrape": "false"},
+					Annotations: annotations,
 				},
 				Spec: apiv1.PodSpec{
 					NodeSelector: nodeSelector,
@@ -212,17 +245,11 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 							Env:             envVars,
 							Resources:       *resources,
 							ImagePullPolicy: imagePullPolicy,
-							LivenessProbe:   probe,
-							ReadinessProbe:  probe,
-						},
-						{
-							// Deploy a state container for each function
-							Name:  "memcached",
-							Image: "launcher.gcr.io/google/memcached1",
-							Ports: []apiv1.ContainerPort{
-								{ContainerPort: int32(11211), Protocol: v1.ProtocolTCP},
+							LivenessProbe:   livenessProbe,
+							ReadinessProbe:  readinessProbe,
+							SecurityContext: &v1.SecurityContext{
+								ReadOnlyRootFilesystem: &request.ReadOnlyRootFilesystem,
 							},
-							ImagePullPolicy: imagePullPolicy,
 						},
 					},
 					RestartPolicy: v1.RestartPolicyAlways,
@@ -232,6 +259,8 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 		},
 	}
 
+	configureReadOnlyRootFilesystem(request, deploymentSpec)
+
 	if err := UpdateSecrets(request, deploymentSpec, existingSecrets); err != nil {
 		return nil, err
 	}
@@ -240,6 +269,7 @@ func makeDeploymentSpec(request requests.CreateFunctionRequest, existingSecrets 
 }
 
 func makeServiceSpec(request requests.CreateFunctionRequest) *v1.Service {
+
 	serviceSpec := &v1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
@@ -247,7 +277,7 @@ func makeServiceSpec(request requests.CreateFunctionRequest) *v1.Service {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        request.Service,
-			Annotations: map[string]string{"prometheus.io.scrape": "false"},
+			Annotations: buildAnnotations(request),
 		},
 		Spec: v1.ServiceSpec{
 			Type: v1.ServiceTypeClusterIP,
@@ -267,6 +297,18 @@ func makeServiceSpec(request requests.CreateFunctionRequest) *v1.Service {
 		},
 	}
 	return serviceSpec
+}
+
+func buildAnnotations(request requests.CreateFunctionRequest) map[string]string {
+	var annotations map[string]string
+	if request.Annotations != nil {
+		annotations = *request.Annotations
+	} else {
+		annotations = map[string]string{}
+	}
+
+	annotations["prometheus.io.scrape"] = "false"
+	return annotations
 }
 
 func buildEnvVars(request *requests.CreateFunctionRequest) []v1.EnvVar {
@@ -365,4 +407,44 @@ func getMinReplicaCount(labels map[string]string) *int32 {
 	}
 
 	return nil
+}
+
+// configureReadOnlyRootFilesystem will create or update the required settings and mounts to ensure
+// that the ReadOnlyRootFilesystem setting works as expected, meaning:
+// 1. when ReadOnlyRootFilesystem is true, the security context of the container will have ReadOnlyRootFilesystem also
+//    marked as true and a new `/tmp` folder mount will be added to the deployment spec
+// 2. when ReadOnlyRootFilesystem is false, the security context of the container will also have ReadOnlyRootFilesystem set
+//    to false and there will be no mount for the `/tmp` folder
+//
+// This method is safe for both create and update operations.
+func configureReadOnlyRootFilesystem(request requests.CreateFunctionRequest, deployment *v1beta1.Deployment) {
+	if deployment.Spec.Template.Spec.Containers[0].SecurityContext != nil {
+		deployment.Spec.Template.Spec.Containers[0].SecurityContext.ReadOnlyRootFilesystem = &request.ReadOnlyRootFilesystem
+	} else {
+		deployment.Spec.Template.Spec.Containers[0].SecurityContext = &v1.SecurityContext{
+			ReadOnlyRootFilesystem: &request.ReadOnlyRootFilesystem,
+		}
+	}
+
+	existingVolumes := removeVolume("temp", deployment.Spec.Template.Spec.Volumes)
+	deployment.Spec.Template.Spec.Volumes = existingVolumes
+
+	existingMounts := removeVolumeMount("temp", deployment.Spec.Template.Spec.Containers[0].VolumeMounts)
+	deployment.Spec.Template.Spec.Containers[0].VolumeMounts = existingMounts
+
+	if request.ReadOnlyRootFilesystem {
+		deployment.Spec.Template.Spec.Volumes = append(
+			existingVolumes,
+			v1.Volume{
+				Name: "temp",
+				VolumeSource: v1.VolumeSource{
+					EmptyDir: &v1.EmptyDirVolumeSource{},
+				},
+			},
+		)
+		deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			existingMounts,
+			v1.VolumeMount{Name: "temp", MountPath: "/tmp", ReadOnly: false},
+		)
+	}
 }

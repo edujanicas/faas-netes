@@ -27,19 +27,3 @@ spec:
           - faas-cluster
       nodeSelector:
         openfaas-type: master
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: nats
-  namespace: openfaas
-  labels:
-    app: nats
-spec:
-  type: ClusterIP
-  ports:
-    - port: 4222
-      protocol: TCP
-      targetPort: 4222
-  selector:
-    app: nats
