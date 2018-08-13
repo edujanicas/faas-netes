@@ -71,6 +71,4 @@ spec:
         ports:
         - containerPort: 8081
           protocol: TCP
-      nodeSelector:
-        openfaas-type: master
 

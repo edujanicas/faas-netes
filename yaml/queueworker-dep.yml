@@ -21,5 +21,3 @@ spec:
           value: "30s"
         - name: faas_function_suffix
           value: ".openfaas-fn.svc.cluster.local."  # absolute DNS will suppress search domains
-      nodeSelector:
-        openfaas-type: master

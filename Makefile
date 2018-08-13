@@ -12,10 +12,10 @@ build-armhf:
 	docker build -t openfaas/faas-netes:$(TAG)-armhf . -f Dockerfile.armhf
 
 build:
-	docker build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" -t openfaas/faas-netes:$(TAG) .
+	docker build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" -t ejanicas/faas-netes:$(TAG) .
 
 push:
-	docker push alexellis2/faas-netes:$(TAG)
+	docker push ejanicas/faas-netes:$(TAG)
 
 namespaces:
 	kubectl apply -f namespaces.yml

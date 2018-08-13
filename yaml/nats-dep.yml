@@ -25,5 +25,3 @@ spec:
           - memory
           - --cluster_id
           - faas-cluster
-      nodeSelector:
-        openfaas-type: master
